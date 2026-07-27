@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import client from '../api/client';
 
 const navItems = [
   {
@@ -153,6 +154,17 @@ export default function Layout() {
 
         {/* Page content */}
         <main className="flex-1 p-4 md:p-8 animate-fade-in">
+          {client.isDemoMode() && (
+            <div className="mb-6 flex items-center justify-between gap-3 bg-brand-500/10 border border-brand-500/20 text-brand-200 rounded-xl px-4 py-2.5 text-xs md:text-sm shadow-sm backdrop-blur-md">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span><strong>Demo Mode Active:</strong> Data is saved locally in your browser. All features (signup, login, expenses, budgets, charts) work offline.</span>
+              </div>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

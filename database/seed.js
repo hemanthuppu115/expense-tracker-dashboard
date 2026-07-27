@@ -1,18 +1,23 @@
 /**
- * Seed script — generates a demo user and ~90 realistic expenses spread
- * across the last 3 months, plus a monthly budget.
+ * Database Seed Script
+ * Generates a demo user, realistic expenses, and monthly budget.
  *
- * Usage: npm run seed
+ * Usage:
+ *   node database/seed.js
+ *   or via backend: npm run seed
  *
  * Demo credentials:
  *   email:    demo@example.com
  *   password: password123
  */
 
+const path = require('path');
+module.paths.push(path.resolve(__dirname, '../backend/node_modules'));
+require('dotenv').config({ path: path.resolve(__dirname, '../backend/.env') });
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const { randomUUID } = require('crypto');
-const pool = require('../src/db/pool');
+const pool = require('./pool');
 
 const CATEGORIES = [
   'Food & Dining', 'Transport', 'Housing', 'Utilities',
@@ -48,7 +53,6 @@ function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 function pick(arr) { return arr[randInt(0, arr.length - 1)]; }
 
 function formatDate(date) {
-  // Use local year/month/day to avoid UTC rollback on timezone-offset machines
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');

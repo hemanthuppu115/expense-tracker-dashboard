@@ -1,34 +1,20 @@
 /**
- * Migration script — creates the expense_tracker database and all tables.
- * Run once: npm run migrate
+ * Database Migration Script
+ * Creates the database, tables, foreign keys, and indexes.
  *
- * MySQL-specific decisions vs the original PostgreSQL schema:
- *
- * - UUID storage: CHAR(36) with UUID() as the default via a BEFORE INSERT
- *   trigger, because MySQL < 8.0.13 doesn't support UUID() as a column
- *   default expression. We generate UUIDs in application code instead.
- *
- * - Timestamps: DATETIME instead of TIMESTAMPTZ. MySQL stores DATETIME in
- *   the server's local timezone. For a single-server app this is fine; for
- *   multi-region you'd use TIMESTAMP (which MySQL auto-converts to UTC).
- *
- * - DECIMAL(12,2) for money — same reason as PostgreSQL: exact decimal
- *   arithmetic, no floating-point rounding errors.
- *
- * - date column: DATE type, same rationale — we care about the calendar
- *   day, not the time. DATE_FORMAT(date, '%Y-%m-01') gives us the month
- *   bucket, equivalent to date_trunc('month', date) in PostgreSQL.
- *
- * - Indexes: composite (user_id, date) and (user_id, category) same as
- *   before — MySQL also uses the leftmost prefix of a composite index,
- *   so user_id-first satisfies both the equality and range predicates.
+ * Usage:
+ *   node database/migrate.js
+ *   or via backend: npm run migrate
  */
 
+const path = require('path');
+module.paths.push(path.resolve(__dirname, '../backend/node_modules'));
+require('dotenv').config({ path: path.resolve(__dirname, '../backend/.env') });
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 async function migrate() {
-  // Connect without a database first so we can CREATE DATABASE
+  // Connect without a database first so we can CREATE DATABASE IF NOT EXISTS
   const conn = await mysql.createConnection({
     host:     process.env.MYSQL_HOST     || 'localhost',
     port:     parseInt(process.env.MYSQL_PORT || '3306', 10),
@@ -37,8 +23,9 @@ async function migrate() {
   });
 
   try {
-    await conn.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.MYSQL_DATABASE || 'expense_tracker'}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    await conn.query(`USE \`${process.env.MYSQL_DATABASE || 'expense_tracker'}\``);
+    const dbName = process.env.MYSQL_DATABASE || 'expense_tracker';
+    await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    await conn.query(`USE \`${dbName}\``);
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -64,13 +51,13 @@ async function migrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
-    // Composite index: primary access pattern is user + date range
+    // Composite index: user + date range
     await conn.query(`
       CREATE INDEX idx_expenses_user_date
         ON expenses (user_id, date DESC)
-    `).catch(() => {}); // ignore if already exists
+    `).catch(() => {});
 
-    // Secondary index: category breakdown queries
+    // Secondary index: category breakdown
     await conn.query(`
       CREATE INDEX idx_expenses_user_category
         ON expenses (user_id, category)

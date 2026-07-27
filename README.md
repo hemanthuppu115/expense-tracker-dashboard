@@ -263,12 +263,9 @@ Straightforward `GROUP BY`. The `(user_id, category)` index makes the grouping f
 ```
 .
 ├── backend/
-│   ├── scripts/
-│   │   ├── migrate.js      # One-time schema setup
-│   │   └── seed.js         # Demo data generator
 │   └── src/
 │       ├── db/
-│       │   └── pool.js     # pg Pool singleton
+│       │   └── pool.js     # Connection pool delegate
 │       ├── middleware/
 │       │   ├── auth.js     # JWT Bearer verification
 │       │   └── validate.js # express-validator result checker
@@ -278,6 +275,12 @@ Straightforward `GROUP BY`. The `(user_id, category)` index makes the grouping f
 │       │   ├── analytics.js  # All aggregation queries live here
 │       │   └── budgets.js
 │       └── index.js        # Express app + route mounting
+├── database/
+│   ├── schema.sql          # Raw MySQL schema definitions
+│   ├── pool.js            # MySQL2 connection pool
+│   ├── migrate.js         # Schema & database migration runner
+│   ├── seed.js            # Demo data generator
+│   └── README.md          # Database documentation
 └── frontend/
     └── src/
         ├── api/

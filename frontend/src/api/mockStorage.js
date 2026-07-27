@@ -1,17 +1,38 @@
 // Mock storage & API implementation for offline/demo mode (e.g. GitHub Pages)
 
-const MOCK_STORAGE_KEY_EXPENSES = 'expense_tracker_demo_expenses';
-const MOCK_STORAGE_KEY_USERS = 'expense_tracker_demo_users';
-const MOCK_STORAGE_KEY_BUDGETS = 'expense_tracker_demo_budgets';
+const MOCK_STORAGE_USERS = 'expense_tracker_demo_users_v2';
 
-// Seed sample data if empty
+function getUsers() {
+  try {
+    return JSON.parse(localStorage.getItem(MOCK_STORAGE_USERS)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUsers(users) {
+  localStorage.setItem(MOCK_STORAGE_USERS, JSON.stringify(users));
+}
+
 function seedInitialData() {
-  if (!localStorage.getItem(MOCK_STORAGE_KEY_EXPENSES)) {
+  let users = getUsers();
+  const demoUserExists = users.some(u => u.email === 'demo@example.com');
+
+  if (!demoUserExists) {
+    const demoUser = {
+      id: 'demo-user-1',
+      name: 'Demo User',
+      email: 'demo@example.com',
+      password: 'password123',
+    };
+    users.push(demoUser);
+    saveUsers(users);
+
+    // Seed sample expenses for demo user ONLY
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
     
-    // Previous month string
     const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const prevYear = prevMonthDate.getFullYear();
     const prevMonth = String(prevMonthDate.getMonth() + 1).padStart(2, '0');
@@ -27,73 +48,107 @@ function seedInitialData() {
       { id: '8', amount: 350.00, category: 'Food & Dining', date: `${prevYear}-${prevMonth}-15`, note: 'Family restaurant dinner', created_at: new Date().toISOString() },
       { id: '9', amount: 500.00, category: 'Travel', date: `${prevYear}-${prevMonth}-20`, note: 'Weekend getaway', created_at: new Date().toISOString() },
     ];
-    localStorage.setItem(MOCK_STORAGE_KEY_EXPENSES, JSON.stringify(initialExpenses));
-  }
+    localStorage.setItem(`expense_tracker_user_demo-user-1_expenses`, JSON.stringify(initialExpenses));
 
-  if (!localStorage.getItem(MOCK_STORAGE_KEY_BUDGETS)) {
-    const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
     const initialBudgets = [
       { id: 'b1', month: currentMonthStr, amount: 2500.00 }
     ];
-    localStorage.setItem(MOCK_STORAGE_KEY_BUDGETS, JSON.stringify(initialBudgets));
+    localStorage.setItem(`expense_tracker_user_demo-user-1_budgets`, JSON.stringify(initialBudgets));
   }
 }
 
 seedInitialData();
 
-function getExpenses() {
-  try { return JSON.parse(localStorage.getItem(MOCK_STORAGE_KEY_EXPENSES)) || []; }
-  catch { return []; }
+function getCurrentUser() {
+  const token = localStorage.getItem('token');
+  if (!token) return null;
+
+  const userId = token.replace('mock-jwt-', '');
+  const users = getUsers();
+  const user = users.find(u => u.id === userId);
+  return user || null;
 }
 
-function saveExpenses(expenses) {
-  localStorage.setItem(MOCK_STORAGE_KEY_EXPENSES, JSON.stringify(expenses));
+function getUserExpenses(userId) {
+  try {
+    return JSON.parse(localStorage.getItem(`expense_tracker_user_${userId}_expenses`)) || [];
+  } catch {
+    return [];
+  }
 }
 
-function getBudgets() {
-  try { return JSON.parse(localStorage.getItem(MOCK_STORAGE_KEY_BUDGETS)) || []; }
-  catch { return []; }
+function saveUserExpenses(userId, expenses) {
+  localStorage.setItem(`expense_tracker_user_${userId}_expenses`, JSON.stringify(expenses));
 }
 
-function saveBudgets(budgets) {
-  localStorage.setItem(MOCK_STORAGE_KEY_BUDGETS, JSON.stringify(budgets));
+function getUserBudgets(userId) {
+  try {
+    return JSON.parse(localStorage.getItem(`expense_tracker_user_${userId}_budgets`)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUserBudgets(userId, budgets) {
+  localStorage.setItem(`expense_tracker_user_${userId}_budgets`, JSON.stringify(budgets));
+}
+
+function authError(message = 'Unauthorized. Please log in.', status = 401) {
+  return { response: { status, data: { error: message } } };
 }
 
 export const mockStorageApi = {
   // Auth mock
   signup: async ({ name, email, password }) => {
-    const user = { id: 'demo-user-1', name: name || 'Demo User', email };
-    const token = 'mock-demo-jwt-token';
-    return { data: { token, user } };
+    if (!email || !password || !name) {
+      throw authError('All fields are required.', 400);
+    }
+    const users = getUsers();
+    if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+      throw authError('An account with that email already exists.', 409);
+    }
+    const userId = 'user-' + Date.now();
+    const newUser = { id: userId, name, email: email.toLowerCase(), password };
+    users.push(newUser);
+    saveUsers(users);
+
+    const token = `mock-jwt-${userId}`;
+    const userSummary = { id: userId, name: newUser.name, email: newUser.email };
+    return { data: { token, user: userSummary } };
   },
 
   login: async ({ email, password }) => {
-    const name = email.split('@')[0] || 'Demo User';
-    const user = { id: 'demo-user-1', name: name.charAt(0).toUpperCase() + name.slice(1), email };
-    const token = 'mock-demo-jwt-token';
-    return { data: { token, user } };
+    const users = getUsers();
+    const user = users.find(u => u.email.toLowerCase() === (email || '').toLowerCase());
+    if (!user || user.password !== password) {
+      throw authError('Invalid email or password.', 401);
+    }
+    const token = `mock-jwt-${user.id}`;
+    const userSummary = { id: user.id, name: user.name, email: user.email };
+    return { data: { token, user: userSummary } };
   },
 
   getMe: async () => {
-    const storedUser = JSON.parse(localStorage.getItem('user')) || {
-      id: 'demo-user-1',
-      name: 'Demo User',
-      email: 'demo@example.com',
-    };
-    return { data: { user: storedUser } };
+    const user = getCurrentUser();
+    if (!user) {
+      throw authError('Unauthorized. Please log in.', 401);
+    }
+    return { data: { user: { id: user.id, name: user.name, email: user.email } } };
   },
 
   // Expenses mock
   getExpenses: async (params = {}) => {
-    let expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    let expenses = getUserExpenses(user.id);
     const { category, from, to, page = 1, limit = 50 } = params;
 
     if (category) expenses = expenses.filter(e => e.category === category);
     if (from) expenses = expenses.filter(e => e.date >= from);
     if (to) expenses = expenses.filter(e => e.date <= to);
 
-    // Sort by date DESC
     expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const total = expenses.length;
@@ -103,20 +158,26 @@ export const mockStorageApi = {
     return {
       data: {
         data: paginated,
-        pagination: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / limit) }
+        pagination: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / limit) || 1 }
       }
     };
   },
 
   getExpenseById: async (id) => {
-    const expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    const expenses = getUserExpenses(user.id);
     const exp = expenses.find(e => e.id === id);
-    if (!exp) throw { response: { status: 404, data: { error: 'Expense not found' } } };
+    if (!exp) throw authError('Expense not found', 404);
     return { data: exp };
   },
 
   createExpense: async ({ amount, category, date, note }) => {
-    const expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    const expenses = getUserExpenses(user.id);
     const newExp = {
       id: String(Date.now()),
       amount: parseFloat(amount),
@@ -127,14 +188,17 @@ export const mockStorageApi = {
       updated_at: new Date().toISOString()
     };
     expenses.unshift(newExp);
-    saveExpenses(expenses);
+    saveUserExpenses(user.id, expenses);
     return { data: newExp, status: 201 };
   },
 
   updateExpense: async (id, { amount, category, date, note }) => {
-    const expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    const expenses = getUserExpenses(user.id);
     const index = expenses.findIndex(e => e.id === id);
-    if (index === -1) throw { response: { status: 404, data: { error: 'Expense not found' } } };
+    if (index === -1) throw authError('Expense not found', 404);
 
     expenses[index] = {
       ...expenses[index],
@@ -144,40 +208,52 @@ export const mockStorageApi = {
       note: note || '',
       updated_at: new Date().toISOString()
     };
-    saveExpenses(expenses);
+    saveUserExpenses(user.id, expenses);
     return { data: expenses[index] };
   },
 
   deleteExpense: async (id) => {
-    let expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    let expenses = getUserExpenses(user.id);
     expenses = expenses.filter(e => e.id !== id);
-    saveExpenses(expenses);
+    saveUserExpenses(user.id, expenses);
     return { data: { deleted: true, id } };
   },
 
   // Budgets mock
   getCurrentBudget: async () => {
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-    const budgets = getBudgets();
-    const budget = budgets.find(b => b.month.startsWith(currentMonthStr.slice(0, 7))) || { amount: 2500.00 };
-    return { data: { budget: parseFloat(budget.amount), month: currentMonthStr } };
+    const budgets = getUserBudgets(user.id);
+    const budget = budgets.find(b => b.month.startsWith(currentMonthStr.slice(0, 7)));
+    return { data: { budget: budget ? parseFloat(budget.amount) : null, month: currentMonthStr } };
   },
 
   setBudget: async ({ month, amount }) => {
-    const budgets = getBudgets();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    const budgets = getUserBudgets(user.id);
     const monthStr = `${month}-01`;
     const index = budgets.findIndex(b => b.month.startsWith(month));
     const newBudget = { id: String(Date.now()), month: monthStr, amount: parseFloat(amount) };
     if (index >= 0) budgets[index] = newBudget;
     else budgets.push(newBudget);
-    saveBudgets(budgets);
+    saveUserBudgets(user.id, budgets);
     return { data: newBudget };
   },
 
   // Analytics mock
   getSummary: async () => {
-    const expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    const expenses = getUserExpenses(user.id);
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth();
@@ -198,10 +274,10 @@ export const mockStorageApi = {
       }
     });
 
-    const budgets = getBudgets();
+    const budgets = getUserBudgets(user.id);
     const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
     const bObj = budgets.find(b => b.month.startsWith(currentMonthStr));
-    const budget = bObj ? parseFloat(bObj.amount) : 2500.00;
+    const budget = bObj ? parseFloat(bObj.amount) : null;
 
     const change_pct = lastMonthTotal === 0 ? null : parseFloat((((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100).toFixed(1));
 
@@ -211,14 +287,17 @@ export const mockStorageApi = {
         last_month: parseFloat(lastMonthTotal.toFixed(2)),
         change_pct,
         budget,
-        budget_remaining: parseFloat((budget - thisMonthTotal).toFixed(2)),
-        budget_pct_used: parseFloat(((thisMonthTotal / budget) * 100).toFixed(1))
+        budget_remaining: budget !== null ? parseFloat((budget - thisMonthTotal).toFixed(2)) : null,
+        budget_pct_used: budget ? parseFloat(((thisMonthTotal / budget) * 100).toFixed(1)) : 0
       }
     };
   },
 
   getCategoryBreakdown: async ({ from, to } = {}) => {
-    let expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    let expenses = getUserExpenses(user.id);
     const today = new Date();
 
     if (from && to) {
@@ -228,7 +307,6 @@ export const mockStorageApi = {
     } else if (to) {
       expenses = expenses.filter(e => e.date <= to);
     } else {
-      // Default to current month
       const currentYear = today.getFullYear();
       const currentMonth = today.getMonth();
       expenses = expenses.filter(e => {
@@ -252,7 +330,10 @@ export const mockStorageApi = {
   },
 
   getOverTime: async ({ months = 6 } = {}) => {
-    const expenses = getExpenses();
+    const user = getCurrentUser();
+    if (!user) throw authError();
+
+    const expenses = getUserExpenses(user.id);
     const today = new Date();
     const result = [];
 

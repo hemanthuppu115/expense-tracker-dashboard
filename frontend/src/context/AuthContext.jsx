@@ -4,15 +4,18 @@ import api from '../api/client';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
-  });
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Validate stored token on mount
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) { setLoading(false); return; }
+    if (!token) {
+      setUser(null);
+      localStorage.removeItem('user');
+      setLoading(false);
+      return;
+    }
 
     api.get('/auth/me')
       .then(({ data }) => setUser(data.user))
